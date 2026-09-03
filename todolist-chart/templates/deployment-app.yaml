@@ -40,7 +40,6 @@ spec:
             - name: http
               containerPort: {{ .Values.app.port }}
 
-          # ── Variáveis não-sensíveis ──────────────────────────────────────
           env:
             - name: APP_NAME
               value: {{ .Values.app.env.APP_NAME | quote }}
@@ -56,17 +55,19 @@ spec:
               value: {{ .Values.postgresql.database | quote }}
             - name: DB_USER
               value: {{ .Values.postgresql.user | quote }}
+            # DB_PASSWORD via env var — a app lê arquivo primeiro, env como fallback
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: todolist-postgres
+                  key: DB_PASSWORD
             - name: SECRETS_DIR
               value: "/var/run/secrets/todolist"
 
-          # ── Segredos montados como arquivos ──────────────────────────────
-          # A app lê de SECRETS_DIR — mais seguro que variáveis de ambiente
+          # SESSION_KEY, ADMIN_USER, ADMIN_PASSWORD, CLEANUP_TOKEN montados como arquivos
           volumeMounts:
             - name: app-secrets
               mountPath: /var/run/secrets/todolist
-              readOnly: true
-            - name: db-secret
-              mountPath: /var/run/secrets/todolist-db
               readOnly: true
 
           livenessProbe:
@@ -91,9 +92,3 @@ spec:
         - name: app-secrets
           secret:
             secretName: todolist-app
-        - name: db-secret
-          secret:
-            secretName: todolist-postgres
-            items:
-              - key: DB_PASSWORD
-                path: DB_PASSWORD
