@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: todolist-cleanup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist-cleanup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  schedule: {{ .Values.cleanup.schedule | quote }}
+  concurrencyPolicy: Forbid          # não acumula execuções atrasadas
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: todolist-cleanup
+            app.kubernetes.io/name: todolist-cleanup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: "{{ .Values.cleanup.image.repository }}:{{ .Values.cleanup.image.tag }}"
+              imagePullPolicy: {{ .Values.cleanup.image.pullPolicy }}
+              env:
+                - name: CLEANUP_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: todolist-app
+                      key: CLEANUP_TOKEN
+              command:
+                - sh
+                - -c
+                - |
+                  curl -sf \
+                    -X POST \
+                    -H "X-Cleanup-Token: ${CLEANUP_TOKEN}" \
+                    http://todolist.{{ .Release.Namespace }}.svc.cluster.local/cleanup

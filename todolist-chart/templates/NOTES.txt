@@ -1,0 +1,19 @@
+TodoList instalado com sucesso!
+
+{{- if .Values.ingress.enabled }}
+Acesse a aplicação em:
+  http://{{ .Values.ingress.host }}
+
+(certifique-se de que a porta 8080 do host está mapeada para o Ingress Controller)
+{{- else }}
+Ingress desabilitado. Para acessar via port-forward:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/todolist 5000:80
+  Acesse: http://localhost:5000
+{{- end }}
+
+Credenciais padrão (altere em produção!):
+  Usuário:  {{ .Values.app.secret.ADMIN_USER }}
+  Senha:    (definida via secret)
+
+Cleanup CronJob agendado: {{ .Values.cleanup.schedule }}
+Histórico em: http://{{ .Values.ingress.host }}/cleanup/status

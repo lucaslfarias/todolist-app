@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: todolist-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  serviceName: todolist-postgres-headless  # referencia o Headless Service abaixo
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todolist-postgres
+  template:
+    metadata:
+      labels:
+        app: todolist-postgres
+        app.kubernetes.io/name: todolist-postgres
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      # Garante que o pod anterior terminou antes de subir o novo
+      # Importante para não ter dois processos escrevendo no mesmo PVC
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.postgresql.port }}
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: todolist-postgres
+                  key: POSTGRES_PASSWORD
+            # Garante que os dados ficam em um subdiretório para evitar
+            # conflito com o diretório raiz da montagem (lost+found, etc.)
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgresql.user | quote }}
+                - -d
+                - {{ .Values.postgresql.database | quote }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgresql.user | quote }}
+                - -d
+                - {{ .Values.postgresql.database | quote }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+
+  # O StatefulSet gerencia o PVC — não precisa de objeto PVC separado.
+  # O nome do PVC gerado será: data-todolist-postgres-0
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: todolist-postgres
+          app.kubernetes.io/instance: {{ .Release.Name }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.storage.size }}

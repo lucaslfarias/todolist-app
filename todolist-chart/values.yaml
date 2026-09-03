@@ -1,0 +1,70 @@
+# ── Aplicação ─────────────────────────────────────────────────────────────────
+app:
+  image:
+    repository: todolist-app
+    tag: v1
+    pullPolicy: IfNotPresent
+
+  replicas: 2
+
+  port: 5000
+
+  env:
+    APP_NAME: TodoList
+    APP_COLOR: blue
+
+  # Valores sensíveis — sobrescritos via set_sensitive no Terraform
+  secret:
+    SESSION_KEY: dev-session-key
+    ADMIN_USER: admin
+    ADMIN_PASSWORD: admin
+    CLEANUP_TOKEN: dev-cleanup-token
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+postgresql:
+  image:
+    repository: postgres
+    tag: "16"
+    pullPolicy: IfNotPresent
+
+  port: 5432
+
+  database: todolist
+  user: todolist
+
+  secret:
+    POSTGRES_PASSWORD: todolist
+
+  storage:
+    size: 1Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ── CronJob de limpeza ────────────────────────────────────────────────────────
+cleanup:
+  # Roda a cada 5 minutos
+  schedule: "*/5 * * * *"
+  image:
+    repository: curlimages/curl
+    tag: "8.7.1"
+    pullPolicy: IfNotPresent
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  host: localhost
+  ingressClassName: nginx

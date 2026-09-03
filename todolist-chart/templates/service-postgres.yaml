@@ -1,0 +1,38 @@
+# Service normal — usado pela app (DB_HOST: todolist-postgres)
+# Faz load balance para o pod do StatefulSet via selector
+apiVersion: v1
+kind: Service
+metadata:
+  name: todolist-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: todolist-postgres
+  ports:
+    - name: postgres
+      port: {{ .Values.postgresql.port }}
+      targetPort: postgres
+---
+# Headless Service — exigido pelo StatefulSet para DNS estável dos pods
+# Permite: todolist-postgres-0.todolist-postgres-headless.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: todolist-postgres-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  clusterIP: None   # headless
+  selector:
+    app: todolist-postgres
+  ports:
+    - name: postgres
+      port: {{ .Values.postgresql.port }}
+      targetPort: postgres
