@@ -7,22 +7,19 @@ terraform {
   }
 }
 
-# ─────────────────────────────────────────────
-# Cluster kind
-# ─────────────────────────────────────────────
 resource "kind_cluster" "this" {
-  name            = var.cluster_name
-  node_image      = var.kubernetes_version
-  wait_for_ready  = true
+  name           = var.cluster_name
+  node_image     = var.kubernetes_version
+  wait_for_ready = true
 
   kind_config {
     kind        = "Cluster"
     api_version = "kind.x-k8s.io/v1alpha4"
 
-    # ── Control-plane ──────────────────────────
     node {
       role = "control-plane"
 
+      # Label necessário para o nodeSelector do ingress-nginx
       kubeadm_config_patches = [
         <<-YAML
           kind: InitConfiguration
@@ -47,7 +44,6 @@ resource "kind_cluster" "this" {
       }
     }
 
-    # ── Workers ────────────────────────────────
     dynamic "node" {
       for_each = range(var.worker_count)
       content {

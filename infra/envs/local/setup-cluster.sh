@@ -5,7 +5,6 @@ REGISTRY_NAME="kind-registry"
 REGISTRY_PORT="5001"
 CLUSTER_NAME="devops-challenge"
  
-# ── 1. Registry local ────────────────────────────────────────────────
 if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}" 2>/dev/null)" != "true" ]; then
   echo "-> Criando registry local..."
   docker run -d \
@@ -17,7 +16,6 @@ else
   echo "-> Registry ja esta rodando."
 fi
  
-# ── 2. Cluster kind ──────────────────────────────────────────────────
 if ! kind get clusters | grep -q "${CLUSTER_NAME}"; then
   echo "-> Criando cluster kind..."
   cat <<EOF | kind create cluster --name "${CLUSTER_NAME}" --config=-
@@ -34,13 +32,11 @@ else
   echo "-> Cluster ja existe."
 fi
  
-# ── 3. registry - kind ───────────────────────────────
 if [ "$(docker inspect -f='{{json .NetworkSettings.Networks.kind}}' "${REGISTRY_NAME}")" = 'null' ]; then
   echo "-> Conectando registry a rede kind..."
   docker network connect kind "${REGISTRY_NAME}"
 fi
  
-# ── 4. ConfigMap ───────────────
 echo "-> Aplicando ConfigMap do registry..."
 cat <<EOF | kubectl apply -f -
 apiVersion: v1

@@ -50,7 +50,6 @@ jobs:
       - name: Update image tag in values.yaml
         run: |
           TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d: -f2)
-          sed -i "s|repository: localhost:5001/todolist-app|repository: ghcr.io/${{ env.IMAGE_NAME }}|g" todolist-chart/values.yaml
           sed -i "/repository: ghcr.io\/${{ env.IMAGE_NAME }}/{n;s/tag: .*/tag: ${TAG}/}" todolist-chart/values.yaml
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

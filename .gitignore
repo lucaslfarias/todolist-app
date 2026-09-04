@@ -15,7 +15,6 @@ infra/**/.terraform.tfstate.lock.info
 infra/**/crash.log
 infra/**/override.tf
 infra/**/override.tf.json
-.github
-echo "terraform.tfvars" >> .gitignore
-echo "*.secret.tfvars" >> .gitignore
-echo "argocd.exe" >> .gitignore
+terraform.tfvars
+*.secret.tfvars
+argocd.exe

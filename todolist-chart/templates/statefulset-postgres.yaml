@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: todolist-postgres
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
-  serviceName: todolist-postgres-headless  # referencia o Headless Service abaixo
+  serviceName: todolist-postgres-headless
   replicas: 1
   selector:
     matchLabels:
@@ -19,8 +19,6 @@ spec:
         app.kubernetes.io/name: todolist-postgres
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
-      # Garante que o pod anterior terminou antes de subir o novo
-      # Importante para não ter dois processos escrevendo no mesmo PVC
       terminationGracePeriodSeconds: 60
 
       containers:
@@ -40,8 +38,6 @@ spec:
                 secretKeyRef:
                   name: todolist-postgres
                   key: POSTGRES_PASSWORD
-            # Garante que os dados ficam em um subdiretório para evitar
-            # conflito com o diretório raiz da montagem (lost+found, etc.)
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           livenessProbe:
@@ -72,8 +68,6 @@ spec:
             - name: data
               mountPath: /var/lib/postgresql/data
 
-  # O StatefulSet gerencia o PVC — não precisa de objeto PVC separado.
-  # O nome do PVC gerado será: data-todolist-postgres-0
   volumeClaimTemplates:
     - metadata:
         name: data

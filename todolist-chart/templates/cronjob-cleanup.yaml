@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   schedule: {{ .Values.cleanup.schedule | quote }}
-  concurrencyPolicy: Forbid          # não acumula execuções atrasadas
+  concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 5
   failedJobsHistoryLimit: 3
   jobTemplate:
