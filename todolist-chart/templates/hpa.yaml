@@ -1,0 +1,30 @@
+{{- if .Values.app.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: todolist
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: todolist
+  minReplicas: {{ .Values.app.hpa.minReplicas }}
+  maxReplicas: {{ .Values.app.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.app.hpa.targetCPU }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.app.hpa.targetMemory }}
+{{- end }}

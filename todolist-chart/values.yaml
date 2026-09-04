@@ -20,7 +20,15 @@ app:
     limits:
       cpu: 500m
       memory: 256Mi
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPU: 70
+    targetMemory: 80
+  pdb:
+    enabled: true
+    minAvailable: 1
 postgresql:
   image:
     repository: postgres
@@ -40,14 +48,12 @@ postgresql:
     limits:
       cpu: 500m
       memory: 256Mi
-# ── CronJob de limpeza ────────────────────────────────────────────────────────
 cleanup:
   schedule: "*/5 * * * *"
   image:
     repository: curlimages/curl
     tag: "8.7.1"
     pullPolicy: IfNotPresent
-# ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:
   enabled: true
   host: localhost

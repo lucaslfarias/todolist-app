@@ -1,0 +1,15 @@
+{{- if .Values.app.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: todolist
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  minAvailable: {{ .Values.app.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: todolist
+{{- end }}
