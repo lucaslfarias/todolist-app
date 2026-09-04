@@ -11,7 +11,7 @@ app:
 
   env:
     APP_NAME: TodoList
-    APP_COLOR: blue
+    APP_COLOR: green
 
   # Valores sensíveis — sobrescritos via set_sensitive no Terraform
   secret:

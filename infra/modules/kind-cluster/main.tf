@@ -20,14 +20,9 @@ resource "kind_cluster" "this" {
     api_version = "kind.x-k8s.io/v1alpha4"
 
     # ── Control-plane ──────────────────────────
-    # Mapeamos as portas 80/443 do container para
-    # portas acessíveis no host (sua máquina).
-    # Isso é necessário porque o kind roda dentro
-    # do Docker e não expõe portas automaticamente.
     node {
       role = "control-plane"
 
-      # Permite que o Ingress Controller use hostPorts
       kubeadm_config_patches = [
         <<-YAML
           kind: InitConfiguration
