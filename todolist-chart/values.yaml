@@ -1,8 +1,8 @@
 # ── Aplicação ─────────────────────────────────────────────────────────────────
 app:
   image:
-    repository: localhost:5001/todolist-app
-    tag: v1
+    repository: ghcr.io/lucaslfarias/todolist-app
+    tag: be07be5
     pullPolicy: IfNotPresent
 
   replicas: 2
@@ -32,7 +32,7 @@ app:
 postgresql:
   image:
     repository: postgres
-    tag: "16"
+    tag: be07be5
     pullPolicy: IfNotPresent
 
   port: 5432
@@ -60,7 +60,7 @@ cleanup:
   schedule: "*/5 * * * *"
   image:
     repository: curlimages/curl
-    tag: "8.7.1"
+    tag: be07be5
     pullPolicy: IfNotPresent
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
