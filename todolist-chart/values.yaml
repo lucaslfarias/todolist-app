@@ -4,8 +4,8 @@ app:
     tag: be07be5
     pullPolicy: IfNotPresent
 
-  # So e usado quando app.hpa.enabled = false.
-  # Com o HPA ligado o Deployment nao declara replicas (ver deployment-app.yaml).
+  # Usado apenas quando app.hpa.enabled = false. Com o HPA ligado o Deployment
+  # nao declara replicas (ver templates/deployment-app.yaml).
   replicas: 2
 
   port: 5000
@@ -20,32 +20,30 @@ app:
     ADMIN_PASSWORD: admin
     CLEANUP_TOKEN: dev-cleanup-token
 
-  # Concorrencia do gunicorn (lido como WEB_CONCURRENCY pelo processo).
-  # 1 worker sync = 1 requisicao por vez por pod. Com 2 workers o pod
-  # consegue usar de fato a CPU que voce reservou, e a metrica de
-  # utilizacao passa a refletir carga real em vez de fila.
+  # Concorrencia do gunicorn, entregue como WEB_CONCURRENCY. Com 1 worker sync
+  # o pod atende uma requisicao por vez e nunca usa a CPU reservada, o que
+  # degrada o sinal do HPA.
   gunicorn:
     workers: 2
 
-  # Segundos entre o SIGTERM e o kill. Precisa ser maior que preStopSleepSeconds
-  # somado ao tempo da requisicao mais longa.
+  # Intervalo entre o SIGTERM e o kill. Precisa ser maior que
+  # preStopSleepSeconds somado a duracao da requisicao mais longa.
   terminationGracePeriodSeconds: 30
-  # Janela para o endpoint sair das tabelas do kube-proxy e do ingress-nginx
-  # antes de o gunicorn comecar a fechar. Evita 502 no scale-down do HPA.
+  # Janela para o endpoint sair do kube-proxy e do ingress-nginx antes de o
+  # gunicorn comecar a fechar. Evita 502 durante scale-down e rollout.
   preStopSleepSeconds: 5
 
   # -------------------------------------------------------------------------
-  # requests e a BASE DE CALCULO do HPA: utilizacao = uso / requests.
-  # Mudar requests muda o comportamento do autoscaler, nao so o scheduling.
+  # requests e a base de calculo do HPA: utilizacao = uso / requests. Alterar
+  # requests muda o comportamento do autoscaler, nao apenas o scheduling.
   #
-  # Com requests.cpu: 100m (valor anterior) e 1 worker gunicorn saturado
-  # consumindo ~1000m, a utilizacao reportada e 1000% — o HPA vai direto para
-  # maxReplicas no primeiro pico e o alvo de 70% vira decorativo.
-  # 200m da uma faixa util entre "ocioso" e "no teto".
+  # Com cpu: 100m, um worker gunicorn saturado consumindo ~1000m reporta 1000%
+  # de utilizacao e o HPA vai direto a maxReplicas no primeiro pico, tornando o
+  # alvo de 70% irrelevante. 200m produz uma faixa util entre ocioso e teto.
   #
-  # O limite de CPU e proposital 3x o request: limite colado no request faz o
-  # cgroup throttlar, e CPU throttled aparece como uso alto e constante — o
-  # HPA le isso como "preciso escalar" quando o problema era o limite.
+  # O limite de CPU e 3x o request de proposito: limite colado no request faz o
+  # cgroup throttlar, e CPU throttled aparece como uso alto e constante — o HPA
+  # interpreta como necessidade de escalar quando o gargalo era o limite.
   # -------------------------------------------------------------------------
   resources:
     requests:
@@ -67,26 +65,25 @@ app:
 
     targetCPU: 70
 
-    # DESABILITADO de proposito (era 80).
-    # O HPA usa o MAIOR resultado entre as metricas. Memoria de processo Python
-    # nao volta para o SO depois do pico, entao a metrica fica presa acima do
-    # alvo e o cluster nunca desce de maxReplicas. Se quiser manter como rede
-    # de seguranca contra vazamento, use algo como 90 — nunca 80.
+    # Desabilitado deliberadamente. O HPA usa o maior resultado entre as
+    # metricas configuradas, e memoria de processo Python nao retorna ao SO
+    # apos o pico: a metrica fica presa acima do alvo e o deployment nunca
+    # desce de maxReplicas. Como rede de seguranca contra vazamento, um alvo
+    # alto (90) seria aceitavel.
     targetMemory: null
 
-    # Metricas extras (Prometheus Adapter, KEDA, etc). Ex.: requisicoes por
-    # segundo — sinal muito melhor que CPU para app web I/O-bound.
+    # Metricas externas (Prometheus Adapter, KEDA). Requisicoes por segundo e
+    # um sinal melhor que CPU para uma aplicacao web I/O-bound.
     extraMetrics: []
 
-    # ---------------------------------------------------------------------
-    # behavior: sem este bloco o HPA usa o padrao (janela de 300s para
-    # descer, 0s para subir, dobrando a cada 15s). O explicito abaixo sobe
-    # rapido e desce devagar, que e o que voce quer num app web.
-    # ---------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    # O padrao do HPA e janela de 300s para descer e 0s para subir. O bloco
+    # abaixo torna a politica explicita: sobe rapido, desce devagar.
+    # -----------------------------------------------------------------------
     behavior:
       scaleUp:
-        # 30s de janela: absorve o pico de 1 scrape isolado do metrics-server
-        # sem atrasar reacao a carga real.
+        # 30s absorve o pico de um scrape isolado do metrics-server sem
+        # atrasar a reacao a carga real.
         stabilizationWindowSeconds: 30
         policies:
           - type: Percent
@@ -97,8 +94,8 @@ app:
             periodSeconds: 30
         selectPolicy: Max
       scaleDown:
-        # 5 min olhando para tras: o HPA so desce se a carga ficou baixa
-        # durante toda a janela. Evita derrubar capacidade entre dois picos.
+        # Janela de 5 min: so reduz se a carga permaneceu baixa durante todo o
+        # periodo, evitando derrubar capacidade entre dois picos.
         stabilizationWindowSeconds: 300
         policies:
           - type: Pods
@@ -108,25 +105,24 @@ app:
 
   # -------------------------------------------------------------------------
   # PodDisruptionBudget
-  # Vale so para disrupcoes VOLUNTARIAS (drain, upgrade de no, eviction do
-  # descheduler). Nao protege contra no que morre, OOMKill ou crash.
+  # Cobre apenas disrupcoes voluntarias (drain, upgrade de no, eviction do
+  # descheduler). Nao protege contra queda de no, OOMKill ou crash.
   # -------------------------------------------------------------------------
   pdb:
     enabled: true
 
-    # maxUnavailable acompanha o HPA; minAvailable nao.
-    # Com minAvailable: 1 (valor anterior) e o HPA em 5 replicas, o drain pode
-    # despejar 4 pods de uma vez e deixar o app com 1/5 da capacidade.
-    # maxUnavailable: 1 significa "um de cada vez", independente da escala.
+    # maxUnavailable acompanha a escala do HPA; minAvailable nao. Com
+    # minAvailable: 1 e o HPA em 5 replicas, um drain pode despejar 4 pods de
+    # uma vez. maxUnavailable: 1 significa um pod por vez em qualquer escala.
     maxUnavailable: 1
     minAvailable: null
 
-    # AlwaysAllow: pod que nunca ficou Ready pode ser despejado mesmo com o
-    # budget estourado. Sem isso, um deploy quebrado trava o drain do no.
+    # AlwaysAllow permite despejar pods que nunca ficaram Ready mesmo com o
+    # budget estourado, impedindo que um deploy quebrado trave o drain do no.
     unhealthyPodEvictionPolicy: AlwaysAllow
 
-  # Espalha as replicas entre os nos — sem isso o PDB protege pouco, porque
-  # as 2 replicas podem estar no mesmo worker.
+  # Espalha as replicas entre os nos. Sem isso o PDB protege pouco, porque as
+  # replicas podem estar todas no mesmo worker.
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: kubernetes.io/hostname
@@ -155,9 +151,9 @@ postgresql:
       cpu: 500m
       memory: 256Mi
 
-  # Ver o comentario longo em templates/poddisruptionbudget-postgres.yaml.
-  # Resumo: com replicas: 1, um PDB com minAvailable: 1 trava `kubectl drain`
-  # permanentemente. Deixe desligado ate ter replicacao de verdade.
+  # Desligado enquanto o banco roda com replica unica: um PDB com
+  # minAvailable: 1 sobre um unico pod trava `kubectl drain` permanentemente.
+  # Ver templates/poddisruptionbudget-postgres.yaml.
   pdb:
     enabled: false
     minAvailable: null

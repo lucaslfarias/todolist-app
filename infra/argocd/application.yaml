@@ -9,7 +9,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/lucaslfarias/todolist-app  # ajuste para o seu repositório
+    repoURL: https://github.com/lucaslfarias/todolist-app
     targetRevision: HEAD
     path: todolist-chart
     helm:
@@ -29,20 +29,16 @@ spec:
       - ServerSideApply=true
 
   # ---------------------------------------------------------------------------
-  # HPA x GitOps
+  # Convivencia entre HPA e selfHeal.
   #
-  # selfHeal: true faz o ArgoCD reverter qualquer divergencia entre o cluster e
-  # o Git. spec.replicas de um Deployment com HPA diverge o tempo todo — por
-  # design. Sem a excecao abaixo, o app fica OutOfSync permanentemente e o
-  # ArgoCD briga com o HPA a cada reconciliacao.
+  # selfHeal reverte qualquer divergencia entre cluster e Git, e spec.replicas
+  # de um Deployment com HPA diverge por design. O template ja omite o campo
+  # quando hpa.enabled = true, o que resolve o caso principal; a excecao abaixo
+  # e a segunda camada, cobrindo ambientes com o HPA desligado e evitando
+  # OutOfSync permanente caso o campo reapareca.
   #
-  # O template ja omite spec.replicas quando hpa.enabled = true, o que resolve
-  # o caso principal. Isto aqui e a segunda camada: cobre o periodo em que
-  # hpa.enabled ainda for false em algum ambiente e evita OutOfSync se o campo
-  # voltar por qualquer motivo.
-  #
-  # ManagedFieldsManagers e o mecanismo correto sob ServerSideApply: diz ao
-  # ArgoCD para ignorar os campos cujo owner e o controller do HPA.
+  # managedFieldsManagers e o mecanismo correto sob ServerSideApply: instrui o
+  # ArgoCD a ignorar os campos cujo owner e o controller do HPA.
   # ---------------------------------------------------------------------------
   ignoreDifferences:
     - group: apps

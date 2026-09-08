@@ -1,30 +1,16 @@
-# =============================================================================
-# metrics-server — PRE-REQUISITO DO HPA
+# metrics-server — pre-requisito do HPA.
 #
-# O kind NAO traz metrics-server. Sem ele o HPA fica assim para sempre:
+# O kind nao inclui metrics-server. Sem ele o HPA reporta TARGETS <unknown>
+# indefinidamente e emite FailedGetResourceMetric, nunca escalando.
 #
-#   $ kubectl get hpa -n todolist
-#   NAME       REFERENCE             TARGETS              MINPODS  MAXPODS  REPLICAS
-#   todolist   Deployment/todolist   <unknown>/70%        2        5        2
-#
-# e o evento correspondente e:
-#   FailedGetResourceMetric  failed to get cpu utilization:
-#   unable to get metrics for resource cpu: no metrics returned from resource
-#   metrics API
-#
-# Os dois args abaixo sao obrigatorios no kind:
-#
+# As duas primeiras flags sao obrigatorias no kind:
 #   --kubelet-insecure-tls
-#       o kubelet do kind serve as metricas com certificado auto-assinado que
-#       nao esta na CA do cluster; sem essa flag o scrape falha com
-#       "x509: cannot validate certificate".
-#
-#   --kubelet-preferred-address-types=InternalIP,...
-#       o padrao tenta Hostname primeiro, e o hostname do no do kind nao
-#       resolve dentro da rede de pods.
-#
-# Coloque este arquivo em infra/envs/local/ ao lado do main.tf.
-# =============================================================================
+#     o kubelet do kind serve metricas com certificado auto-assinado fora da
+#     CA do cluster; sem a flag o scrape falha com "x509: cannot validate
+#     certificate".
+#   --kubelet-preferred-address-types
+#     o padrao tenta Hostname primeiro, e o hostname do no do kind nao resolve
+#     dentro da rede de pods.
 
 resource "helm_release" "metrics_server" {
   name       = "metrics-server"
@@ -43,15 +29,15 @@ resource "helm_release" "metrics_server" {
     value = "--kubelet-preferred-address-types=InternalIP\\,ExternalIP\\,Hostname"
   }
 
-  # Janela de resolucao das metricas. 15s deixa o HPA reagir mais rapido que
-  # o padrao de 60s, o que importa para demonstrar scale-up em teste de carga.
+  # Resolucao de 15s (padrao: 60s) para o HPA reagir mais rapido a variacao
+  # de carga.
   set {
     name  = "args[2]"
     value = "--metric-resolution=15s"
   }
 
-  # Um unico no de metrics-server basta no local; evita disputa por CPU
-  # no cluster kind rodando em laptop.
+  # Replica unica: o ambiente local nao precisa de HA e o cluster kind roda
+  # em uma unica maquina.
   set {
     name  = "replicas"
     value = "1"

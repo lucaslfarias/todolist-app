@@ -1,21 +1,14 @@
 {{- if .Values.postgresql.pdb.enabled }}
 {{- /*
-  ATENCAO — leia antes de habilitar.
-
   O StatefulSet do Postgres roda com replicas: 1. Um PDB com minAvailable: 1
-  sobre um unico pod significa "zero disrupcoes voluntarias permitidas": o
-  `kubectl drain` do no fica preso para sempre, e upgrades de no via
-  cluster-autoscaler / Karpenter / node pool travam.
+  sobre um unico pod equivale a proibir toda disrupcao voluntaria: o
+  `kubectl drain` fica preso indefinidamente e upgrades de no travam.
 
-  Opcoes:
-    - enabled: false (padrao) — o drain funciona; voce aceita o downtime do
-      banco durante manutencao de no.
-    - maxUnavailable: 1 — o PDB existe mas nunca bloqueia nada. Serve so
-      como documentacao; nao protege.
-    - minAvailable: 1 COM replicas >= 2 e replicacao real (Patroni,
-      CloudNativePG, CrunchyData). Ai sim o PDB tem sentido.
-
-  Com 1 replica e PVC ReadWriteOnce, o caminho honesto e nao ter PDB.
+  Por isso o padrao do chart e enabled: false — o drain funciona e assume-se o
+  downtime do banco durante manutencao de no. Com maxUnavailable: 1 o objeto
+  existe mas nunca bloqueia nada, servindo apenas como documentacao.
+  minAvailable so passa a fazer sentido com replicas >= 2 e replicacao real
+  (Patroni, CloudNativePG, CrunchyData).
 */ -}}
 {{- if and .Values.postgresql.pdb.minAvailable .Values.postgresql.pdb.maxUnavailable }}
 {{- fail "postgresql.pdb: defina minAvailable OU maxUnavailable, nunca os dois" }}

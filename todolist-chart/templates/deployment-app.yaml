@@ -8,14 +8,10 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   {{- /*
-    MUDANCA 1 — com o HPA ligado, o campo replicas NAO vai no manifesto.
-
-    Se ele ficar aqui, todo `helm upgrade` (e todo sync do ArgoCD com
-    selfHeal: true) reescreve replicas para o valor do values.yaml e
-    desfaz o que o HPA acabou de decidir. O resultado e um pingue-pongue:
-    HPA sobe para 5, ArgoCD derruba para 2, HPA sobe de novo.
-
-    Com o campo ausente, o HPA e o unico dono de spec.replicas.
+    Com o HPA ligado, spec.replicas e omitido do manifesto para que o
+    autoscaler seja o unico dono do campo. Se ele fosse renderizado, cada
+    `helm upgrade` (e cada sync do ArgoCD com selfHeal) reescreveria o valor
+    do values.yaml por cima da decisao do HPA.
     Na primeira instalacao o Deployment sobe com 1 pod e o HPA ajusta para
     minReplicas em poucos segundos.
   */}}
@@ -26,9 +22,8 @@ spec:
   revisionHistoryLimit: 5
 
   {{- /*
-    MUDANCA 2 — rollout surge-first.
-    maxUnavailable: 0 garante que o rollout nunca reduz a capacidade abaixo
-    do numero atual de replicas, entao ele nunca conflita com o PDB.
+    Rollout surge-first: maxUnavailable: 0 impede que a atualizacao reduza a
+    capacidade abaixo do numero atual de replicas, evitando conflito com o PDB.
   */}}
   strategy:
     type: RollingUpdate
@@ -49,25 +44,18 @@ spec:
       serviceAccountName: todolist
 
       {{- /*
-        MUDANCA 3 — espalhar as replicas entre os nos.
-        Um PDB so protege de verdade se os pods estiverem em nos diferentes:
-        com 2 replicas no mesmo no, drenar esse no derruba as duas de uma vez
-        e o PDB apenas atrasa o inevitavel.
-        whenUnsatisfiable: ScheduleAnyway e proposital — com 2 workers e
-        maxReplicas 5 o scheduler PRECISA poder empilhar; DoNotSchedule
-        deixaria pods Pending e travaria o scale-up do HPA.
+        Distribui as replicas entre os nos. Um PDB so protege de verdade se os
+        pods estiverem em nos distintos: com todas as replicas no mesmo worker,
+        drenar esse no derruba tudo de uma vez.
+        whenUnsatisfiable: ScheduleAnyway permite que o scheduler empilhe pods
+        quando necessario; DoNotSchedule deixaria pods Pending e travaria o
+        scale-up do HPA.
       */}}
       {{- with .Values.app.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
-      {{- /*
-        MUDANCA 4 — janela de shutdown gracioso.
-        No scale-down o HPA mata pods; sem o preStop o pod para de aceitar
-        conexoes antes de o kube-proxy/ingress removerem o endpoint, e o
-        usuario ve 502.
-      */}}
       terminationGracePeriodSeconds: {{ .Values.app.terminationGracePeriodSeconds }}
 
       initContainers:
@@ -96,6 +84,11 @@ spec:
             - name: http
               containerPort: {{ .Values.app.port }}
 
+          {{- /*
+            preStop segura o container pelo tempo necessario para o endpoint
+            sair das tabelas do kube-proxy e do ingress-nginx antes do gunicorn
+            comecar a fechar conexoes. Sem isso, o scale-down do HPA gera 502.
+          */}}
           lifecycle:
             preStop:
               exec:
@@ -109,12 +102,11 @@ spec:
             - name: APP_PORT
               value: {{ .Values.app.port | quote }}
             {{- /*
-              MUDANCA 5 — concorrencia do gunicorn.
-              O CMD do Dockerfile nao passa --workers, entao o gunicorn sobe
-              com 1 worker sync: 1 requisicao por vez por pod. Nesse regime o
-              pod satura em latencia muito antes de a CPU media dizer qualquer
-              coisa util, e o sinal do HPA fica ruim.
-              WEB_CONCURRENCY e lido pelo proprio gunicorn, sem tocar na imagem.
+              O CMD da imagem nao passa --workers, entao o gunicorn sobe com 1
+              worker sync: uma requisicao por vez por pod. Nesse regime o pod
+              satura em latencia muito antes de a CPU media indicar carga, e o
+              sinal do HPA fica ruim. WEB_CONCURRENCY e lido pelo proprio
+              gunicorn, o que ajusta a concorrencia sem alterar a imagem.
             */}}
             - name: WEB_CONCURRENCY
               value: {{ .Values.app.gunicorn.workers | quote }}
@@ -140,10 +132,9 @@ spec:
               readOnly: true
 
           {{- /*
-            MUDANCA 6 — startupProbe.
-            Sem ela, a livenessProbe comeca a contar em 10s. Num pod recem
-            criado pelo scale-up, sob no carregado, isso pode matar o pod
-            antes de ele subir — e o HPA entra em loop de criar/matar.
+            A startupProbe suspende a livenessProbe durante a inicializacao.
+            Sem ela, um pod criado pelo scale-up do HPA em no carregado pode ser
+            morto antes de terminar de subir, gerando um ciclo de criar/matar.
           */}}
           startupProbe:
             httpGet:
