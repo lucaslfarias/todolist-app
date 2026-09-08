@@ -1,9 +1,6 @@
 # Registro de decisões
 
-Decisões técnicas relevantes tomadas durante o desafio, com justificativa e alternativas descartadas.
-
----
-
+Decisões técnicas relevantes tomadas durante o desafio.
 ## Kubernetes local: kind
 
 **Escolha:** kind (Kubernetes in Docker)
@@ -11,8 +8,8 @@ Decisões técnicas relevantes tomadas durante o desafio, com justificativa e al
 kind cria nós Kubernetes como containers Docker, o que elimina a necessidade de VMs e funciona diretamente no Docker Desktop ou em WSL2. O provider Terraform `tehcyx/kind` permite criar e destruir o cluster via `terraform apply/destroy`, mantendo tudo reproduzível.
 
 **Descartado:**
-- **minikube:** cria uma VM por padrão, mais pesado e com fricção maior no WSL2.
-- **k3s/k3d:** opção válida, mas o ecossistema de providers Terraform para kind é mais maduro para esse caso de uso.
+- **minikube:** cria uma VM por padrão.
+- **k3s/k3d:** opção válida, porem teria que instalar wsl ou usar VM.
 - **Cloud (EKS, GKE, AKS):** o desafio pede ambiente local; cloud adicionaria custo e dependência de conta externa.
 
 ---

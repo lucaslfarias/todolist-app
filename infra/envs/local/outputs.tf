@@ -28,7 +28,7 @@ output "ingress_nginx_status" {
   value       = helm_release.ingress_nginx.status
 }
 
-output "todolist_status" {
-  description = "Status do helm release da aplicação"
-  value       = helm_release.todolist.status
+output "argocd_status" {
+  description = "Status do helm release do ArgoCD"
+  value       = helm_release.argocd.status
 }
