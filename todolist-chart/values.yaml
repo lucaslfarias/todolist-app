@@ -1,7 +1,7 @@
 app:
   image:
     repository: ghcr.io/lucaslfarias/todolist-app
-    tag: "16"
+    tag: 3b1e404
     pullPolicy: IfNotPresent
   replicas: 2
   port: 5000
@@ -32,7 +32,7 @@ app:
 postgresql:
   image:
     repository: postgres
-    tag: "16"
+    tag: '16'
     pullPolicy: IfNotPresent
   port: 5432
   database: todolist
@@ -49,10 +49,10 @@ postgresql:
       cpu: 500m
       memory: 256Mi
 cleanup:
-  schedule: "*/5 * * * *"
+  schedule: '*/5 * * * *'
   image:
     repository: curlimages/curl
-    tag: "16"
+    tag: '16'
     pullPolicy: IfNotPresent
 ingress:
   enabled: true
