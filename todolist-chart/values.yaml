@@ -1,38 +1,144 @@
 app:
   image:
     repository: ghcr.io/lucaslfarias/todolist-app
-    tag: 3de6926
+    tag: be07be5
     pullPolicy: IfNotPresent
+
+  # So e usado quando app.hpa.enabled = false.
+  # Com o HPA ligado o Deployment nao declara replicas (ver deployment-app.yaml).
   replicas: 2
+
   port: 5000
+
   env:
     APP_NAME: TodoList
     APP_COLOR: green
+
   secret:
     SESSION_KEY: dev-session-key
     ADMIN_USER: admin
     ADMIN_PASSWORD: admin
     CLEANUP_TOKEN: dev-cleanup-token
+
+  # Concorrencia do gunicorn (lido como WEB_CONCURRENCY pelo processo).
+  # 1 worker sync = 1 requisicao por vez por pod. Com 2 workers o pod
+  # consegue usar de fato a CPU que voce reservou, e a metrica de
+  # utilizacao passa a refletir carga real em vez de fila.
+  gunicorn:
+    workers: 2
+
+  # Segundos entre o SIGTERM e o kill. Precisa ser maior que preStopSleepSeconds
+  # somado ao tempo da requisicao mais longa.
+  terminationGracePeriodSeconds: 30
+  # Janela para o endpoint sair das tabelas do kube-proxy e do ingress-nginx
+  # antes de o gunicorn comecar a fechar. Evita 502 no scale-down do HPA.
+  preStopSleepSeconds: 5
+
+  # -------------------------------------------------------------------------
+  # requests e a BASE DE CALCULO do HPA: utilizacao = uso / requests.
+  # Mudar requests muda o comportamento do autoscaler, nao so o scheduling.
+  #
+  # Com requests.cpu: 100m (valor anterior) e 1 worker gunicorn saturado
+  # consumindo ~1000m, a utilizacao reportada e 1000% — o HPA vai direto para
+  # maxReplicas no primeiro pico e o alvo de 70% vira decorativo.
+  # 200m da uma faixa util entre "ocioso" e "no teto".
+  #
+  # O limite de CPU e proposital 3x o request: limite colado no request faz o
+  # cgroup throttlar, e CPU throttled aparece como uso alto e constante — o
+  # HPA le isso como "preciso escalar" quando o problema era o limite.
+  # -------------------------------------------------------------------------
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 200m
+      memory: 192Mi
     limits:
-      cpu: 500m
-      memory: 256Mi
+      cpu: 600m
+      memory: 384Mi
+
+  # -------------------------------------------------------------------------
+  # HorizontalPodAutoscaler
+  # Requer metrics-server no cluster (ver infra/envs/local/metrics-server.tf).
+  # -------------------------------------------------------------------------
   hpa:
     enabled: true
+
     minReplicas: 2
     maxReplicas: 5
+
     targetCPU: 70
-    targetMemory: 80
+
+    # DESABILITADO de proposito (era 80).
+    # O HPA usa o MAIOR resultado entre as metricas. Memoria de processo Python
+    # nao volta para o SO depois do pico, entao a metrica fica presa acima do
+    # alvo e o cluster nunca desce de maxReplicas. Se quiser manter como rede
+    # de seguranca contra vazamento, use algo como 90 — nunca 80.
+    targetMemory: null
+
+    # Metricas extras (Prometheus Adapter, KEDA, etc). Ex.: requisicoes por
+    # segundo — sinal muito melhor que CPU para app web I/O-bound.
+    extraMetrics: []
+
+    # ---------------------------------------------------------------------
+    # behavior: sem este bloco o HPA usa o padrao (janela de 300s para
+    # descer, 0s para subir, dobrando a cada 15s). O explicito abaixo sobe
+    # rapido e desce devagar, que e o que voce quer num app web.
+    # ---------------------------------------------------------------------
+    behavior:
+      scaleUp:
+        # 30s de janela: absorve o pico de 1 scrape isolado do metrics-server
+        # sem atrasar reacao a carga real.
+        stabilizationWindowSeconds: 30
+        policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+          - type: Pods
+            value: 2
+            periodSeconds: 30
+        selectPolicy: Max
+      scaleDown:
+        # 5 min olhando para tras: o HPA so desce se a carga ficou baixa
+        # durante toda a janela. Evita derrubar capacidade entre dois picos.
+        stabilizationWindowSeconds: 300
+        policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 60
+        selectPolicy: Min
+
+  # -------------------------------------------------------------------------
+  # PodDisruptionBudget
+  # Vale so para disrupcoes VOLUNTARIAS (drain, upgrade de no, eviction do
+  # descheduler). Nao protege contra no que morre, OOMKill ou crash.
+  # -------------------------------------------------------------------------
   pdb:
     enabled: true
-    minAvailable: 1
+
+    # maxUnavailable acompanha o HPA; minAvailable nao.
+    # Com minAvailable: 1 (valor anterior) e o HPA em 5 replicas, o drain pode
+    # despejar 4 pods de uma vez e deixar o app com 1/5 da capacidade.
+    # maxUnavailable: 1 significa "um de cada vez", independente da escala.
+    maxUnavailable: 1
+    minAvailable: null
+
+    # AlwaysAllow: pod que nunca ficou Ready pode ser despejado mesmo com o
+    # budget estourado. Sem isso, um deploy quebrado trava o drain do no.
+    unhealthyPodEvictionPolicy: AlwaysAllow
+
+  # Espalha as replicas entre os nos — sem isso o PDB protege pouco, porque
+  # as 2 replicas podem estar no mesmo worker.
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app: todolist
+
 postgresql:
   image:
     repository: postgres
-    tag: '16'
+    tag: "16"
     pullPolicy: IfNotPresent
   port: 5432
   database: todolist
@@ -48,12 +154,23 @@ postgresql:
     limits:
       cpu: 500m
       memory: 256Mi
+
+  # Ver o comentario longo em templates/poddisruptionbudget-postgres.yaml.
+  # Resumo: com replicas: 1, um PDB com minAvailable: 1 trava `kubectl drain`
+  # permanentemente. Deixe desligado ate ter replicacao de verdade.
+  pdb:
+    enabled: false
+    minAvailable: null
+    maxUnavailable: 1
+    unhealthyPodEvictionPolicy: AlwaysAllow
+
 cleanup:
-  schedule: '*/5 * * * *'
+  schedule: "*/5 * * * *"
   image:
     repository: curlimages/curl
-    tag: '16'
+    tag: "8.7.1"
     pullPolicy: IfNotPresent
+
 ingress:
   enabled: true
   host: localhost

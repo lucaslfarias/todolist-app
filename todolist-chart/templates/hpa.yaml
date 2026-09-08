@@ -1,4 +1,14 @@
 {{- if .Values.app.hpa.enabled }}
+{{- /*
+  Guarda: o HPA de Resource calcula utilização como uso / requests.
+  Sem requests.cpu o HPA fica em <unknown> e nunca escala.
+*/ -}}
+{{- if not (dig "requests" "cpu" "" .Values.app.resources) }}
+{{- fail "app.hpa.enabled=true exige app.resources.requests.cpu definido" }}
+{{- end }}
+{{- if gt (int .Values.app.hpa.minReplicas) (int .Values.app.hpa.maxReplicas) }}
+{{- fail "app.hpa.minReplicas nao pode ser maior que app.hpa.maxReplicas" }}
+{{- end }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -7,24 +17,45 @@ metadata:
   labels:
     app.kubernetes.io/name: todolist
     app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: autoscaling
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: todolist
+
   minReplicas: {{ .Values.app.hpa.minReplicas }}
   maxReplicas: {{ .Values.app.hpa.maxReplicas }}
+
   metrics:
+    {{- if .Values.app.hpa.targetCPU }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
           averageUtilization: {{ .Values.app.hpa.targetCPU }}
+    {{- end }}
+    {{- if .Values.app.hpa.targetMemory }}
+    {{- /*
+      Memoria em processo Python raramente e devolvida ao SO. Como o HPA usa
+      o MAIOR numero de replicas entre todas as metricas, uma metrica de
+      memoria "presa" acima do alvo impede o scale-down para sempre.
+      Deixe desabilitada (null) ou use um alvo alto, so como rede de seguranca.
+    */}}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
           averageUtilization: {{ .Values.app.hpa.targetMemory }}
+    {{- end }}
+    {{- with .Values.app.hpa.extraMetrics }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+
+  {{- with .Values.app.hpa.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}

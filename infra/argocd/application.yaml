@@ -27,3 +27,28 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+
+  # ---------------------------------------------------------------------------
+  # HPA x GitOps
+  #
+  # selfHeal: true faz o ArgoCD reverter qualquer divergencia entre o cluster e
+  # o Git. spec.replicas de um Deployment com HPA diverge o tempo todo — por
+  # design. Sem a excecao abaixo, o app fica OutOfSync permanentemente e o
+  # ArgoCD briga com o HPA a cada reconciliacao.
+  #
+  # O template ja omite spec.replicas quando hpa.enabled = true, o que resolve
+  # o caso principal. Isto aqui e a segunda camada: cobre o periodo em que
+  # hpa.enabled ainda for false em algum ambiente e evita OutOfSync se o campo
+  # voltar por qualquer motivo.
+  #
+  # ManagedFieldsManagers e o mecanismo correto sob ServerSideApply: diz ao
+  # ArgoCD para ignorar os campos cujo owner e o controller do HPA.
+  # ---------------------------------------------------------------------------
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: todolist
+      jsonPointers:
+        - /spec/replicas
+      managedFieldsManagers:
+        - kube-controller-manager

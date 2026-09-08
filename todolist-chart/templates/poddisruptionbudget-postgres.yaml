@@ -1,0 +1,42 @@
+{{- if .Values.postgresql.pdb.enabled }}
+{{- /*
+  ATENCAO — leia antes de habilitar.
+
+  O StatefulSet do Postgres roda com replicas: 1. Um PDB com minAvailable: 1
+  sobre um unico pod significa "zero disrupcoes voluntarias permitidas": o
+  `kubectl drain` do no fica preso para sempre, e upgrades de no via
+  cluster-autoscaler / Karpenter / node pool travam.
+
+  Opcoes:
+    - enabled: false (padrao) — o drain funciona; voce aceita o downtime do
+      banco durante manutencao de no.
+    - maxUnavailable: 1 — o PDB existe mas nunca bloqueia nada. Serve so
+      como documentacao; nao protege.
+    - minAvailable: 1 COM replicas >= 2 e replicacao real (Patroni,
+      CloudNativePG, CrunchyData). Ai sim o PDB tem sentido.
+
+  Com 1 replica e PVC ReadWriteOnce, o caminho honesto e nao ter PDB.
+*/ -}}
+{{- if and .Values.postgresql.pdb.minAvailable .Values.postgresql.pdb.maxUnavailable }}
+{{- fail "postgresql.pdb: defina minAvailable OU maxUnavailable, nunca os dois" }}
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: todolist-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: todolist-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: availability
+spec:
+  {{- if .Values.postgresql.pdb.maxUnavailable }}
+  maxUnavailable: {{ .Values.postgresql.pdb.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ .Values.postgresql.pdb.minAvailable }}
+  {{- end }}
+  unhealthyPodEvictionPolicy: {{ .Values.postgresql.pdb.unhealthyPodEvictionPolicy | default "AlwaysAllow" }}
+  selector:
+    matchLabels:
+      app: todolist-postgres
+{{- end }}

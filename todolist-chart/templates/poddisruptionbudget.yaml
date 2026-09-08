@@ -1,4 +1,15 @@
 {{- if .Values.app.pdb.enabled }}
+{{- /*
+  minAvailable e maxUnavailable sao mutuamente exclusivos: a API rejeita
+  o objeto se os dois vierem preenchidos. A guarda abaixo falha no
+  `helm template`, antes de chegar no cluster.
+*/ -}}
+{{- if and .Values.app.pdb.minAvailable .Values.app.pdb.maxUnavailable }}
+{{- fail "app.pdb: defina minAvailable OU maxUnavailable, nunca os dois" }}
+{{- end }}
+{{- if not (or .Values.app.pdb.minAvailable .Values.app.pdb.maxUnavailable) }}
+{{- fail "app.pdb.enabled=true exige minAvailable ou maxUnavailable" }}
+{{- end }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -7,8 +18,21 @@ metadata:
   labels:
     app.kubernetes.io/name: todolist
     app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: availability
 spec:
+  {{- if .Values.app.pdb.maxUnavailable }}
+  maxUnavailable: {{ .Values.app.pdb.maxUnavailable }}
+  {{- else }}
   minAvailable: {{ .Values.app.pdb.minAvailable }}
+  {{- end }}
+
+  {{- /*
+    AlwaysAllow: pods que nunca ficaram Ready (CrashLoopBackOff, imagem
+    quebrada) podem ser despejados mesmo com o budget estourado. Sem isso um
+    rollout ruim trava o drain do no. Estavel a partir do k8s 1.27.
+  */}}
+  unhealthyPodEvictionPolicy: {{ .Values.app.pdb.unhealthyPodEvictionPolicy | default "AlwaysAllow" }}
+
   selector:
     matchLabels:
       app: todolist
