@@ -1,38 +1,31 @@
 app:
   image:
     repository: ghcr.io/lucaslfarias/todolist-app
-    tag: be07be5
+    tag: 99e2678
     pullPolicy: IfNotPresent
-
   # Usado apenas quando app.hpa.enabled = false. Com o HPA ligado o Deployment
   # nao declara replicas (ver templates/deployment-app.yaml).
   replicas: 2
-
   port: 5000
-
   env:
     APP_NAME: TodoList
     APP_COLOR: green
-
   secret:
     SESSION_KEY: dev-session-key
     ADMIN_USER: admin
     ADMIN_PASSWORD: admin
     CLEANUP_TOKEN: dev-cleanup-token
-
   # Concorrencia do gunicorn, entregue como WEB_CONCURRENCY. Com 1 worker sync
   # o pod atende uma requisicao por vez e nunca usa a CPU reservada, o que
   # degrada o sinal do HPA.
   gunicorn:
     workers: 2
-
   # Intervalo entre o SIGTERM e o kill. Precisa ser maior que
   # preStopSleepSeconds somado a duracao da requisicao mais longa.
   terminationGracePeriodSeconds: 30
   # Janela para o endpoint sair do kube-proxy e do ingress-nginx antes de o
   # gunicorn comecar a fechar. Evita 502 durante scale-down e rollout.
   preStopSleepSeconds: 5
-
   # -------------------------------------------------------------------------
   # requests e a base de calculo do HPA: utilizacao = uso / requests. Alterar
   # requests muda o comportamento do autoscaler, nao apenas o scheduling.
@@ -52,30 +45,24 @@ app:
     limits:
       cpu: 600m
       memory: 384Mi
-
   # -------------------------------------------------------------------------
   # HorizontalPodAutoscaler
   # Requer metrics-server no cluster (ver infra/envs/local/metrics-server.tf).
   # -------------------------------------------------------------------------
   hpa:
     enabled: true
-
     minReplicas: 2
     maxReplicas: 5
-
     targetCPU: 70
-
     # Desabilitado deliberadamente. O HPA usa o maior resultado entre as
     # metricas configuradas, e memoria de processo Python nao retorna ao SO
     # apos o pico: a metrica fica presa acima do alvo e o deployment nunca
     # desce de maxReplicas. Como rede de seguranca contra vazamento, um alvo
     # alto (90) seria aceitavel.
     targetMemory: null
-
     # Metricas externas (Prometheus Adapter, KEDA). Requisicoes por segundo e
     # um sinal melhor que CPU para uma aplicacao web I/O-bound.
     extraMetrics: []
-
     # -----------------------------------------------------------------------
     # O padrao do HPA e janela de 300s para descer e 0s para subir. O bloco
     # abaixo torna a politica explicita: sobe rapido, desce devagar.
@@ -102,7 +89,6 @@ app:
             value: 1
             periodSeconds: 60
         selectPolicy: Min
-
   # -------------------------------------------------------------------------
   # PodDisruptionBudget
   # Cobre apenas disrupcoes voluntarias (drain, upgrade de no, eviction do
@@ -110,17 +96,14 @@ app:
   # -------------------------------------------------------------------------
   pdb:
     enabled: true
-
     # maxUnavailable acompanha a escala do HPA; minAvailable nao. Com
     # minAvailable: 1 e o HPA em 5 replicas, um drain pode despejar 4 pods de
     # uma vez. maxUnavailable: 1 significa um pod por vez em qualquer escala.
     maxUnavailable: 1
     minAvailable: null
-
     # AlwaysAllow permite despejar pods que nunca ficaram Ready mesmo com o
     # budget estourado, impedindo que um deploy quebrado trave o drain do no.
     unhealthyPodEvictionPolicy: AlwaysAllow
-
   # Espalha as replicas entre os nos. Sem isso o PDB protege pouco, porque as
   # replicas podem estar todas no mesmo worker.
   topologySpreadConstraints:
@@ -130,7 +113,6 @@ app:
       labelSelector:
         matchLabels:
           app: todolist
-
 postgresql:
   image:
     repository: postgres
@@ -150,7 +132,6 @@ postgresql:
     limits:
       cpu: 500m
       memory: 256Mi
-
   # Desligado enquanto o banco roda com replica unica: um PDB com
   # minAvailable: 1 sobre um unico pod trava `kubectl drain` permanentemente.
   # Ver templates/poddisruptionbudget-postgres.yaml.
@@ -159,14 +140,12 @@ postgresql:
     minAvailable: null
     maxUnavailable: 1
     unhealthyPodEvictionPolicy: AlwaysAllow
-
 cleanup:
   schedule: "*/5 * * * *"
   image:
     repository: curlimages/curl
     tag: "8.7.1"
     pullPolicy: IfNotPresent
-
 ingress:
   enabled: true
   host: localhost
