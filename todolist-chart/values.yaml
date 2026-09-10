@@ -1,9 +1,8 @@
 app:
   image:
     repository: ghcr.io/lucaslfarias/todolist-app
-    tag: "27a8b3a"
+    tag: "328f926"
     pullPolicy: IfNotPresent
-
   replicas: 2
   port: 5000
   env:
@@ -14,12 +13,9 @@ app:
     ADMIN_USER: admin
     ADMIN_PASSWORD: admin
     CLEANUP_TOKEN: dev-cleanup-token
-
   gunicorn:
     workers: 2
-
   terminationGracePeriodSeconds: 30
-
   resources:
     requests:
       cpu: 200m
@@ -27,7 +23,6 @@ app:
     limits:
       cpu: 600m
       memory: 384Mi
-
   hpa:
     enabled: true
     minReplicas: 2
@@ -53,13 +48,11 @@ app:
             value: 1
             periodSeconds: 60
         selectPolicy: Min
-
   pdb:
     enabled: true
     maxUnavailable: 1
     minAvailable: null
     unhealthyPodEvictionPolicy: AlwaysAllow
-
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: kubernetes.io/hostname
@@ -67,7 +60,6 @@ app:
       labelSelector:
         matchLabels:
           app: todolist
-
 postgresql:
   image:
     repository: postgres
@@ -92,14 +84,12 @@ postgresql:
     minAvailable: 1
     maxUnavailable: null
     unhealthyPodEvictionPolicy: AlwaysAllow
-
 cleanup:
   schedule: "*/5 * * * *"
   image:
     repository: curlimages/curl
     tag: "8.7.1"
     pullPolicy: IfNotPresent
-
 ingress:
   enabled: true
   host: localhost
