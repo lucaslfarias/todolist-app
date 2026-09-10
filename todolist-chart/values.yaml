@@ -1,7 +1,7 @@
 app:
   image:
     repository: ghcr.io/lucaslfarias/todolist-app
-    tag: "9094466"
+    tag: "d1761cd"
     pullPolicy: IfNotPresent
   # Usado apenas quando app.hpa.enabled = false. Com o HPA ligado o Deployment
   # nao declara replicas (ver templates/deployment-app.yaml).
