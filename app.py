@@ -57,7 +57,7 @@ COLORS = {
     'brown':  ('#92400e', '#78350f'),
     'yellow': ('#ca8a04', '#a16207'),
 }
-ACCENT, ACCENT_HOVER = COLORS.get(os.environ.get('APP_COLOR', 'green').lower(), ('#64748b', '#475569'))
+ACCENT, ACCENT_HOVER = COLORS.get(os.environ.get('APP_COLOR', 'blue').lower(), ('#64748b', '#475569'))
 
 K8S_TOKEN_PATH = '/var/run/secrets/kubernetes.io/serviceaccount/token'
 K8S_NS_PATH    = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
