@@ -9,7 +9,7 @@ app:
   port: 5000
   env:
     APP_NAME: TodoList
-    APP_COLOR: green
+    APP_COLOR: pink
   secret:
     SESSION_KEY: dev-session-key
     ADMIN_USER: admin
