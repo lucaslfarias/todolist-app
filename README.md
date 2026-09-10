@@ -197,7 +197,11 @@ Um CronJob executa a cada 5 minutos chamando `POST /cleanup` com o token configu
 
 ### Escalabilidade
 
-O HPA escala a aplicação entre 2 e 5 réplicas com base em CPU (70%) e memória (80%). O PodDisruptionBudget garante pelo menos 1 réplica disponível durante manutenções.
+O HPA escala a aplicação entre 2 e 5 réplicas com base em CPU (70%).
+
+A métrica de memória fica desabilitada (`app.hpa.targetMemory: null`) de propósito: o HPA usa o maior número de réplicas entre todas as métricas, e memória de processo Python raramente é devolvida ao SO. Uma métrica presa acima do alvo impediria o scale-down para sempre.
+
+O PodDisruptionBudget da aplicação permite no máximo 1 pod indisponível por vez durante manutenções. O PDB do Postgres vem desabilitado, porque o StatefulSet roda com uma réplica só e um budget sobre um único pod travaria o `kubectl drain`.
 
 ### Acessar a UI do ArgoCD
 
@@ -211,6 +215,10 @@ Acesse `http://localhost:8888`. Usuário: `admin`. Senha:
 kubectl get secret argocd-initial-admin-secret -n argocd \
   -o jsonpath="{.data.password}" | base64 -d
 ```
+
+### Evidências de execução
+
+O ambiente fica no ar sob meu controle e as evidências são demonstradas ao vivo na apresentação: `terraform apply` do zero, ArgoCD `Synced/Healthy`, o HPA reagindo a carga, um rollout sem downtime e a aplicação no browser.
 
 ---
 

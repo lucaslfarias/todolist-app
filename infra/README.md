@@ -1,164 +1,65 @@
-# Infra Kind — Bloco 1: Cluster Kubernetes local com Terraform
+# Infraestrutura
 
-## Pré-requisitos
+Provisionamento do ambiente com Terraform. O caminho de execução completo, do zero ao browser, está no [README raiz](../README.md).
 
-| Ferramenta | Versão mínima | Verificar |
-|---|---|---|
-| Docker | 24+ | `docker version` |
-| kind | 0.22+ | `kind version` |
-| Terraform | 1.6+ | `terraform version` |
-| kubectl | qualquer recente | `kubectl version --client` |
-
-> **WSL2 / macOS Docker Desktop**: certifique-se de que o Docker daemon está rodando
-> e acessível via socket padrão (`/var/run/docker.sock`).
-
----
-
-## Estrutura de arquivos
+## Estrutura
 
 ```
-infra-kind/
+infra/
 ├── modules/
-│   └── kind-cluster/        # módulo reutilizável
-│       ├── main.tf          # recurso kind_cluster
+│   └── kind-cluster/     # módulo reutilizável: cria o cluster kind
+├── envs/
+│   └── local/            # ambiente local — entry point do terraform apply
+│       ├── providers.tf         # required_providers e configuração dos providers
+│       ├── main.tf              # módulo do cluster + ingress-nginx + ArgoCD + Application
+│       ├── metrics-server.tf    # pré-requisito do HPA
 │       ├── variables.tf
-│       └── outputs.tf
-└── envs/
-    └── local/               # ambiente local (entry point)
-        ├── providers.tf     # required_providers + provider "kind"
-        ├── main.tf          # chama o módulo
-        ├── variables.tf
-        ├── outputs.tf
-        └── terraform.tfvars # valores padrão — edite aqui
+│       ├── outputs.tf
+│       └── terraform.tfvars     # valores padrão — edite aqui
+└── argocd/
+    └── application.yaml  # Application do ArgoCD apontando para o chart
 ```
 
----
+## O que um `terraform apply` cria
 
-## Por que mapeamos portas?
+1. Cluster kind com 1 control-plane e 2 workers
+2. NGINX Ingress Controller (Helm)
+3. metrics-server (Helm) — sem ele o HPA fica em `<unknown>` e nunca escala
+4. ArgoCD (Helm)
+5. `Application` do ArgoCD, que sincroniza o chart e sobe a aplicação
 
-O kind cria nós Kubernetes como **containers Docker**.
-Serviços do tipo `NodePort` ou um Ingress Controller rodam *dentro* desses containers —
-e o Docker não expõe portas automaticamente para o host.
+## Por que as portas são mapeadas
 
-O mapeamento abaixo faz o Docker "furar" essa barreira:
+O kind cria nós Kubernetes como containers Docker. Um Ingress Controller roda *dentro* desses containers, e o Docker não expõe portas para o host automaticamente. O mapeamento resolve isso:
 
 ```
-Sua máquina :8080  →  container control-plane :80
-Sua máquina :8443  →  container control-plane :443
+host :8080  →  control-plane :80
+host :8443  →  control-plane :443
 ```
 
-Assim, `curl http://localhost:8080` chega até o Ingress/NodePort do cluster.
+Assim `curl http://localhost:8080` chega ao Ingress do cluster.
 
----
+## Customizações
 
-## Passo a passo
+Edite `envs/local/terraform.tfvars`:
 
-### 1. Inicializar o Terraform
+| Variável | Padrão | Uso |
+|---|---|---|
+| `cluster_name` | `local-cluster` | Nome do cluster kind |
+| `kubernetes_version` | `kindest/node:v1.30.0` | [Tags disponíveis](https://github.com/kubernetes-sigs/kind/releases) |
+| `worker_count` | `2` | Quantidade de workers |
+| `control_plane_host_port` | `8080` | Altere se a porta já estiver em uso |
+| `control_plane_host_port_https` | `8443` | Idem |
+| `api_server_port` | `46443` | Porta fixa do API server no host |
+
+## Destruir
 
 ```bash
 cd envs/local
-terraform init
-```
-
-Saída esperada:
-```
-Initializing provider plugins...
-- Finding tehcyx/kind versions matching "~> 0.4"...
-- Installing tehcyx/kind v0.4.x...
-Terraform has been successfully initialized!
-```
-
-### 2. Revisar o plano
-
-```bash
-terraform plan
-```
-
-Você verá `1 to add` — o recurso `kind_cluster.this`.
-
-### 3. Criar o cluster
-
-```bash
-terraform apply
-```
-
-Digite `yes` quando solicitado.
-O provider aguarda o cluster ficar `Ready` (`wait_for_ready = true`) antes de finalizar.
-Tempo médio: **1–3 minutos** dependendo da velocidade do download da imagem.
-
-Saída final esperada:
-```
-Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
-
-Outputs:
-cluster_name    = "local-cluster"
-endpoint        = "https://127.0.0.1:XXXXX"
-kubeconfig_path = "/home/<user>/.kube/kind-local-cluster"
-```
-
-### 4. Configurar o kubectl
-
-O provider já escreve o kubeconfig automaticamente.
-Para usar o contexto do cluster:
-
-```bash
-# Opção A — setar a variável de ambiente
-export KUBECONFIG=$(terraform output -raw kubeconfig_path)
-
-# Opção B — mesclar com o kubeconfig padrão
-kind export kubeconfig --name local-cluster
-```
-
-### 5. Validar o cluster
-
-```bash
-kubectl get nodes -o wide
-```
-
-Saída esperada (1 control-plane + 2 workers):
-```
-NAME                          STATUS   ROLES           AGE   VERSION
-local-cluster-control-plane   Ready    control-plane   2m    v1.30.0
-local-cluster-worker          Ready    <none>          90s   v1.30.0
-local-cluster-worker2         Ready    <none>          90s   v1.30.0
-```
-
-```bash
-# Verificações extras
-kubectl cluster-info
-kubectl get namespaces
-kubectl get pods -A          # pods do sistema (coredns, kindnet, etc.)
-```
-
----
-
-## Destruir o cluster
-
-```bash
 terraform destroy
 ```
 
----
+## Notas
 
-## Customizações comuns
-
-### Mudar versão do Kubernetes
-
-Edite `terraform.tfvars`:
-```hcl
-kubernetes_version = "kindest/node:v1.29.4"
-```
-Veja todas as tags disponíveis: https://github.com/kubernetes-sigs/kind/releases
-
-### Mais workers
-
-```hcl
-worker_count = 3
-```
-
-### Mudar as portas do host (se 8080/8443 já estiverem ocupadas)
-
-```hcl
-control_plane_host_port       = 9080
-control_plane_host_port_https = 9443
-```
+- O estado do Terraform é local (`terraform.tfstate`), adequado para um ambiente de desenvolvimento de uma pessoa só. Em ambiente compartilhado, usar backend remoto com lock.
+- Os providers `helm` e `kubectl` são configurados a partir de outputs do módulo do cluster. Em um `apply` sobre estado vazio, o Terraform resolve isso na mesma execução, mas um `plan` isolado antes do cluster existir não consegue avaliar a configuração dos providers.

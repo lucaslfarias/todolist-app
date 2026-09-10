@@ -26,8 +26,10 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true.
-  # ---------------------------------------------------------------------------
+
+  # O Deployment omite spec.replicas quando o HPA esta ligado, mas o
+  # kube-controller-manager preenche o campo no cluster. Sem ignorar essa
+  # diferenca o selfHeal do ArgoCD brigaria com o autoscaler.
   ignoreDifferences:
     - group: apps
       kind: Deployment

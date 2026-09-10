@@ -1,4 +1,4 @@
- text=auto
+* text=auto
 *.tf text eol=lf
 *.tfvars text eol=lf
 *.yml text eol=lf

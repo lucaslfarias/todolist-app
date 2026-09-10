@@ -80,3 +80,41 @@ StatefulSet garante identidade estável ao pod e gerencia o PVC automaticamente.
 - **PostgreSQL sem réplica:** ponto único de falha no banco. Em produção, usar um operator com suporte a replicação.
 - **Secrets no `values.yaml`:** as credenciais estão em texto no repositório. Em produção, usar External Secrets Operator com um vault externo ou `values-secret.yaml` ignorado pelo git.
 - **Cluster local:** o ambiente kind não é acessível externamente, o que limita o CD a pull-based (ArgoCD). Em cloud, o CI poderia fazer push direto via `helm upgrade`.
+
+---
+
+## Desafios encontrados
+
+Problemas reais enfrentados durante o desafio e como foram resolvidos.
+
+### HPA sempre em `<unknown>`
+
+O kind não inclui metrics-server. Sem ele o HPA reporta `TARGETS <unknown>` indefinidamente, emite `FailedGetResourceMetric` e nunca escala. A instalação foi para o Terraform (`infra/envs/local/metrics-server.tf`), com duas flags obrigatórias no kind: `--kubelet-insecure-tls`, porque o kubelet serve métricas com certificado auto-assinado fora da CA do cluster, e `--kubelet-preferred-address-types=InternalIP,...`, porque o padrão tenta `Hostname` primeiro e o hostname do nó não resolve dentro da rede de pods.
+
+### O HPA não reagia à carga mesmo com métricas funcionando
+
+O `CMD` da imagem não passa `--workers`, então o gunicorn subia com 1 worker sync: uma requisição por vez por pod. Nesse regime o pod satura em latência muito antes de a CPU média indicar carga, e o sinal do HPA fica inútil. Resolvido com `WEB_CONCURRENCY`, lido pelo próprio gunicorn, sem alterar a imagem da aplicação.
+
+### `helm upgrade` sobrescrevendo a decisão do autoscaler
+
+Com `spec.replicas` renderizado no manifesto, cada sync do ArgoCD com `selfHeal` reescrevia o valor do `values.yaml` por cima do número de réplicas escolhido pelo HPA. O campo passou a ser omitido quando o HPA está ligado, e o `Application` do ArgoCD ignora diferenças em `/spec/replicas` geradas pelo `kube-controller-manager`.
+
+### 502 durante scale-down e rollout
+
+Quando um pod entra em `Terminating`, o gunicorn começa a fechar conexões antes de o endpoint sair das tabelas do kube-proxy e do ingress-nginx. Foram necessárias duas mudanças: um hook `preStop` segurando o container por alguns segundos e `maxUnavailable: 0` na estratégia de rollout, para a atualização nunca reduzir a capacidade abaixo do número atual de réplicas e não conflitar com o PDB.
+
+### PDB de réplica única travando o drain
+
+Um PDB com `minAvailable: 1` sobre o StatefulSet de uma réplica do Postgres equivale a proibir toda disrupção voluntária: o `kubectl drain` fica preso indefinidamente. O PDB do banco vem desabilitado por padrão, assumindo o downtime durante manutenção de nó. Faz sentido reativar apenas com replicação real.
+
+### Pods mortos durante o scale-up
+
+Um pod criado pelo HPA em nó carregado podia ser morto pela `livenessProbe` antes de terminar de subir, gerando um ciclo de criar e matar. Uma `startupProbe` suspende a liveness durante a inicialização e resolve o caso.
+
+### PDB sem distribuição entre nós não protege nada
+
+Com todas as réplicas no mesmo worker, drenar esse nó derruba tudo de uma vez, independentemente do budget. Foram adicionados `topologySpreadConstraints` com `whenUnsatisfiable: ScheduleAnyway` — `DoNotSchedule` deixaria pods `Pending` e travaria o scale-up do HPA.
+
+### CRDs do ArgoCD no Terraform
+
+O provider `hashicorp/kubernetes` não aplica recursos de CRDs que ainda não existem no momento do plan. O `Application` do ArgoCD é aplicado com `gavinbunney/kubectl`, que trabalha com YAML bruto e não precisa do schema no plan.
