@@ -16,10 +16,14 @@ resource "kind_cluster" "this" {
     kind        = "Cluster"
     api_version = "kind.x-k8s.io/v1alpha4"
 
+    networking {
+      api_server_address = var.api_server_address
+      api_server_port    = var.api_server_port
+    }
+
     node {
       role = "control-plane"
 
-      # Label necessário para o nodeSelector do ingress-nginx
       kubeadm_config_patches = [
         <<-YAML
           kind: InitConfiguration

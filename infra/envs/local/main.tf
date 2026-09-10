@@ -6,6 +6,7 @@ module "kind_cluster" {
   worker_count                  = var.worker_count
   control_plane_host_port       = var.control_plane_host_port
   control_plane_host_port_https = var.control_plane_host_port_https
+  api_server_port               = var.api_server_port
 }
 
 resource "helm_release" "ingress_nginx" {
@@ -26,7 +27,6 @@ resource "helm_release" "ingress_nginx" {
     value = "NodePort"
   }
 
-  # Restringe o controller ao nó marcado como ingress-ready (control-plane)
   set {
     name  = "controller.nodeSelector.ingress-ready"
     value = "true"
@@ -49,7 +49,6 @@ resource "helm_release" "ingress_nginx" {
   depends_on = [module.kind_cluster]
 }
 
-# ArgoCD — observa o repositório e aplica o chart ao detectar mudanças no values.yaml
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -58,10 +57,14 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
 
-  # TLS desabilitado para acesso local via port-forward
   set {
     name  = "configs.params.server\\.insecure"
     value = "true"
+  }
+
+  set {
+    name  = "configs.cm.timeout\\.reconciliation"
+    value = "30s"
   }
 
   wait    = true

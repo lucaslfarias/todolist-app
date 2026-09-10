@@ -1,21 +1,8 @@
-# ── Cluster ───────────────────────────────────────────────────────────────────
-cluster_name          = "local-cluster"
-kubernetes_version    = "kindest/node:v1.30.0"
-worker_count          = 2
+cluster_name       = "local-cluster"
+kubernetes_version = "kindest/node:v1.30.0"
+worker_count       = 2
 
 control_plane_host_port       = 8080
 control_plane_host_port_https = 8443
 
-# ── Aplicação ─────────────────────────────────────────────────────────────────
-app_namespace          = "todolist"
-app_image_repository   = "localhost:5001/todolist-app"
-app_image_tag          = "v1"
-app_admin_user         = "admin"
-ingress_host           = "localhost"
-
-# ── Preencher ────────────────────────────────
-
-app_session_key    = "CHANGE_ME"
-app_admin_password = "CHANGE_ME"
-app_cleanup_token  = "CHANGE_ME"
-db_password        = "CHANGE_ME"
+api_server_port = 46443

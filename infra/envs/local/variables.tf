@@ -28,4 +28,8 @@ variable "control_plane_host_port_https" {
   default     = 8443
 }
 
-# Configurações da aplicação são gerenciadas pelo ArgoCD via todolist-chart/values.yaml
+variable "api_server_port" {
+  description = "Porta fixa do API server no host"
+  type        = number
+  default     = 46443
+}
