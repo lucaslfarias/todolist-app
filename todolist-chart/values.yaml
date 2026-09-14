@@ -80,7 +80,7 @@ postgresql:
       cpu: 500m
       memory: 256Mi
   pdb:
-    enabled: true
+    enabled: false
     minAvailable: 1
     maxUnavailable: null
     unhealthyPodEvictionPolicy: AlwaysAllow
