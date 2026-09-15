@@ -26,4 +26,4 @@ venv/
 .DS_Store
 coverage/
 .pytest_cache/
-*.log
+*.loginfra/envs/local/local-cluster-config
