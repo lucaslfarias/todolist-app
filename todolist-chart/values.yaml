@@ -1,7 +1,7 @@
 app:
   image:
     repository: ghcr.io/lucaslfarias/todolist-app
-    tag: "ee66bc0"
+    tag: "cb70be2"
     pullPolicy: IfNotPresent
   replicas: 2
   port: 5000
